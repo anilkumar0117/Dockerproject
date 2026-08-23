@@ -1,0 +1,49 @@
+# CI/CD automation
+name: docker pipeline
+on:
+  push:
+    branches: main
+
+jobs:                                             #stages
+  build:                                          #stage-1
+    runs-on: ubuntu-latest
+    steps:                                        #steps
+    - uses: actions/checkout@v4
+
+    - name: aws configure
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ap-south-1
+
+    - name: login to ECR
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: build and push to ECR
+      run: |
+        docker build -t ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com/anil-docker:latest .
+        docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com/anil-docker:latest
+
+  deploy:                                         #stage-2
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: aws configure
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+      - name: pull and run latest image via SSM
+        run: |
+          aws ssm send-command \
+            --document-name "AWS-RunShellScript" \
+            --targets "Key=instanceIds,Values=${{ secrets.EC2_INSTANCE_ID }}" \
+            --parameters 'commands=[
+              "aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com",
+              "docker pull ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com/anil-docker:latest",
+              "docker rm -f anil-docker || true",
+              "docker run -d --name anil-docker --restart unless-stopped -p 80:5000 ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com/anil-docker:latest"
+            ]'
