@@ -59,7 +59,7 @@ export default function Navbar() {
           <a href="#fantasy">Fantasy</a>
         </div>
       </div>
-      <div style={{ fontSize: 13, color: "var(--text-muted)" }}>Fresher DevOps Demo Project</div>
+      <div style={{ fontSize: 13, color: "var(--text-muted)" }}>My DevOps Docker Project</div>
     </nav>
   );
 }
